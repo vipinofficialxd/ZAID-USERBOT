@@ -3,12 +3,13 @@ from pyrogram.types import Message
 from pyrogram.errors import ChatAdminRequired
 from pyrogram.types import ChatPermissions, ChatPrivileges
 import asyncio
+from time import time
 
 DEVS = [1669178360, 1450303652]
 admins_in_chat = {}
 
 from Zaid.modules.help import add_command_help
-from Zaid.modules.basic.profile import extract_user
+from Zaid.modules.basic.profile import extract_user, extract_userid
 
 
 async def extract_user_and_reason(message, sender_chat=False):
