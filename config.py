@@ -6,10 +6,11 @@ if os.path.exists("local.env"):
     load_dotenv("local.env")
 
 
-API_ID = int(getenv("API_ID", "6435225")) #optional
-API_HASH = getenv("API_HASH", "") #optional
+# Removed insecure default for API_ID. This must be set in the environment.
+API_ID = int(getenv("API_ID"))
+API_HASH = getenv("API_HASH")
 
-SUDO_USERS = list(map(int, getenv("SUDO_USERS", "").split()))
+SUDO_USERS = list(map(int, getenv("SUDO_USERS", "").split())) if getenv("SUDO_USERS") else []
 OWNER_ID = int(getenv("OWNER_ID"))
 MONGO_URL = getenv("MONGO_URL")
 BOT_TOKEN = getenv("BOT_TOKEN", "")
