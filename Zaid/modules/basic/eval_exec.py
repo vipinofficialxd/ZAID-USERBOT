@@ -1,3 +1,17 @@
+"""
+WARNING: eval_exec module
+
+This module exposes two powerful commands that execute arbitrary code/shell:
+- .eval <python code> — executes Python code in an async function and returns output/traceback
+- .exec <shell command> — executes a shell command and returns stdout/stderr
+
+Security note:
+- These commands are extremely powerful and dangerous. They execute arbitrary code and have access to the running process,
+  filesystem, and the `Zaid.database` object (which is intentionally passed into the eval environment).
+- They MUST remain owner-only. This file currently restricts usage with filters.me; do not weaken this restriction.
+- Consider enabling auditing/logging for each use if you plan to run them in a production account.
+"""
+
 import asyncio
 import io
 import os
