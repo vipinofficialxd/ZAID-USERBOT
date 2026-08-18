@@ -1,19 +1,15 @@
-import os
-import sys
-from re import sub
-from time import time
+from pyrogram import Client, enums, filters
+from pyrogram.types import Message
+from pyrogram.errors import ChatAdminRequired
+from pyrogram.types import ChatPermissions, ChatPrivileges
 import asyncio
 
-from pyrogram import Client, filters, enums
-from pyrogram.errors import ChatAdminRequired
-from pyrogram.types import ChatPermissions, ChatPrivileges, Message
-
-
-DEVS = ["1669178360", "1450303652"]
+DEVS = [1669178360, 1450303652]
 admins_in_chat = {}
 
 from Zaid.modules.help import add_command_help
 from Zaid.modules.basic.profile import extract_user
+
 
 async def extract_user_and_reason(message, sender_chat=False):
     args = message.text.strip().split()
@@ -70,8 +66,6 @@ async def list_admins(client: Client, chat_id: int):
     return admins_in_chat[chat_id]["data"]
 
 
-
-
 unmute_permissions = ChatPermissions(
     can_send_messages=True,
     can_send_media_messages=True,
@@ -86,40 +80,47 @@ unmute_permissions = ChatPermissions(
     filters.group & filters.command(["setchatphoto", "setgpic"], ".") & filters.me
 )
 async def set_chat_photo(client: Client, message: Message):
-    zuzu = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    can_change_admin = zuzu.can_change_info
-    can_change_member = message.chat.permissions.can_change_info
+    try:
+        zuzu = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+        can_change_admin = getattr(zuzu, 'can_change_info', False)
+        can_change_member = getattr(message.chat, 'permissions', None) and getattr(message.chat.permissions, 'can_change_info', False)
+    except Exception:
+        return await message.edit_text("Could not determine permissions. Are you in a chat?")
+
     if not (can_change_admin or can_change_member):
         await message.edit_text("You don't have enough permission")
-    if message.reply_to_message:
-        if message.reply_to_message.photo:
-            await client.set_chat_photo(
-                message.chat.id, photo=message.reply_to_message.photo.file_id
-            )
-            return
+        return
+
+    if message.reply_to_message and message.reply_to_message.photo:
+        await client.set_chat_photo(
+            message.chat.id, photo=message.reply_to_message.photo.file_id
+        )
+        return
     else:
         await message.edit_text("Reply to a photo to set it !")
-
 
 
 @Client.on_message(filters.group & filters.command("ban", ".") & filters.me)
 async def member_ban(client: Client, message: Message):
     user_id, reason = await extract_user_and_reason(message, sender_chat=True)
     rd = await message.edit_text("`Processing...`")
-    bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    if not bot.can_restrict_members:
+    try:
+        bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+    except Exception:
+        return await rd.edit("Could not get bot privileges")
+    if not getattr(bot, 'can_restrict_members', False):
         return await rd.edit("I don't have enough permissions")
     if not user_id:
         return await rd.edit("I can't find that user.")
     if user_id == client.me.id:
         return await rd.edit("I can't ban myself.")
-    if user_id in DEVS:
+    if int(user_id) in DEVS:
         return await rd.edit("I can't ban my developer!")
     if user_id in (await list_admins(client, message.chat.id)):
         return await rd.edit("I can't ban an admin, You know the rules, so do i.")
     try:
         mention = (await client.get_users(user_id)).mention
-    except IndexError:
+    except Exception:
         mention = (
             message.reply_to_message.sender_chat.title
             if message.reply_to_message
@@ -130,27 +131,30 @@ async def member_ban(client: Client, message: Message):
         f"**Banned By:** {message.from_user.mention if message.from_user else 'Anon'}\n"
     )
     if message.command[0][0] == "d":
-        await message.reply_to_message.delete()
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
     if reason:
         msg += f"**Reason:** {reason}"
     await message.chat.ban_member(user_id)
     await rd.edit(msg)
 
 
-
 @Client.on_message(filters.group & filters.command("unban", ".") & filters.me)
 async def member_unban(client: Client, message: Message):
     reply = message.reply_to_message
     rd = await message.edit_text("`Processing...`")
-    bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    if not bot.can_restrict_members:
+    try:
+        bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+    except Exception:
+        return await rd.edit("Could not get bot privileges")
+    if not getattr(bot, 'can_restrict_members', False):
         return await rd.edit("I don't have enough permissions")
-    if reply and reply.sender_chat and reply.sender_chat != message.chat.id:
+    if reply and getattr(reply, 'sender_chat', None) and reply.sender_chat != message.chat.id:
         return await rd.edit("You cannot unban a channel")
 
     if len(message.command) == 2:
         user = message.text.split(None, 1)[1]
-    elif len(message.command) == 1 and reply:
+    elif len(message.command) == 1 and reply and getattr(reply, 'from_user', None):
         user = message.reply_to_message.from_user.id
     else:
         return await rd.edit(
@@ -161,14 +165,16 @@ async def member_unban(client: Client, message: Message):
     await rd.edit(f"Unbanned! {umention}")
 
 
-
 @Client.on_message(filters.command(["pin", "unpin"], ".") & filters.me)
 async def pin_message(client: Client, message):
     if not message.reply_to_message:
         return await message.edit_text("Reply to a message to pin/unpin it.")
     rd = await message.edit_text("`Processing...`")
-    bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    if not bot.can_pin_messages:
+    try:
+        bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+    except Exception:
+        return await rd.edit("Could not get bot privileges")
+    if not getattr(bot, 'can_pin_messages', False):
         return await rd.edit("I don't have enough permissions")
     r = message.reply_to_message
     if message.command[0][0] == "u":
@@ -188,14 +194,17 @@ async def pin_message(client: Client, message):
 async def mute(client: Client, message: Message):
     user_id, reason = await extract_user_and_reason(message)
     rd = await message.edit_text("`Processing...`")
-    bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    if not bot.can_restrict_members:
+    try:
+        bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+    except Exception:
+        return await rd.edit("Could not get bot privileges")
+    if not getattr(bot, 'can_restrict_members', False):
         return await rd.edit("I don't have enough permissions")
     if not user_id:
         return await rd.edit("I can't find that user.")
     if user_id == client.me.id:
         return await rd.edit("I can't mute myself.")
-    if user_id in DEVS:
+    if int(user_id) in DEVS:
         return await rd.edit("I can't mute my developer!")
     if user_id in (await list_admins(client, message.chat.id)):
         return await rd.edit("I can't mute an admin, You know the rules, so do i.")
@@ -210,13 +219,15 @@ async def mute(client: Client, message: Message):
     await rd.edit(msg)
 
 
-
 @Client.on_message(filters.group & filters.command("unmute", ".") & filters.me)
 async def unmute(client: Client, message: Message):
     user_id = await extract_user(message)
     rd = await message.edit_text("`Processing...`")
-    bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    if not bot.can_restrict_members:
+    try:
+        bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+    except Exception:
+        return await rd.edit("Could not get bot privileges")
+    if not getattr(bot, 'can_restrict_members', False):
         return await rd.edit("I don't have enough permissions")
     if not user_id:
         return await rd.edit("I can't find that user.")
@@ -229,14 +240,17 @@ async def unmute(client: Client, message: Message):
 async def kick_user(client: Client, message: Message):
     user_id, reason = await extract_user_and_reason(message)
     rd = await message.edit_text("`Processing...`")
-    bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    if not bot.can_restrict_members:
+    try:
+        bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+    except Exception:
+        return await rd.edit("Could not get bot privileges")
+    if not getattr(bot, 'can_restrict_members', False):
         return await rd.edit("I don't have enough permissions")
     if not user_id:
         return await rd.edit("I can't find that user.")
     if user_id == client.me.id:
         return await rd.edit("I can't kick myself.")
-    if user_id == DEVS:
+    if int(user_id) in DEVS:
         return await rd.edit("I can't kick my developer.")
     if user_id in (await list_admins(client, message.chat.id)):
         return await rd.edit("I can't kick an admin, You know the rules, so do i.")
@@ -245,7 +259,8 @@ async def kick_user(client: Client, message: Message):
 **Kicked User:** {mention}
 **Kicked By:** {message.from_user.mention if message.from_user else 'Anon'}"""
     if message.command[0][0] == "d":
-        await message.reply_to_message.delete()
+        if message.reply_to_message:
+            await message.reply_to_message.delete()
     if reason:
         msg += f"\n**Reason:** `{reason}`"
     try:
@@ -266,8 +281,11 @@ async def promotte(client: Client, message: Message):
     rd = await message.edit_text("`Processing...`")
     if not user_id:
         return await rd.edit("I can't find that user.")
-    bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
-    if not bot.can_promote_members:
+    try:
+        bot = (await client.get_chat_member(message.chat.id, client.me.id)).privileges
+    except Exception:
+        return await rd.edit("Could not get bot privileges")
+    if not getattr(bot, 'can_promote_members', False):
         return await rd.edit("I don't have enough permissions")
     if message.command[0][0] == "f":
         await message.chat.promote_member(
