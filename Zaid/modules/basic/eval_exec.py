@@ -47,7 +47,14 @@ async def eval_func_edited(bot, message):
 
 async def evaluation_func(bot: Client, message: Message):
     status_message = await message.reply_text("Processing ...")
-    cmd = message.text.split(" ", maxsplit=1)[1]
+
+    # Guard: ensure an expression was provided after the command
+    text = message.text or ""
+    parts = text.split(" ", maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await status_message.edit("Provide a Python expression to evaluate, e.g. `.eval 1+1`")
+        return
+    cmd = parts[1]
 
     reply_to_id = message.id
     if message.reply_to_message:
@@ -129,7 +136,13 @@ async def execution_func(bot, message):
 
 
 async def execution(bot: Client, message: Message):
-    cmd = message.text.split(" ", maxsplit=1)[1]
+    # Guard: ensure a shell command was provided after the command
+    text = message.text or ""
+    parts = text.split(" ", maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.reply_text("Provide a shell command to execute, e.g. `.exec ls -la`")
+        return
+    cmd = parts[1]
 
     reply_to_id = message.id
     if message.reply_to_message:
